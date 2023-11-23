@@ -1,0 +1,100 @@
+esphome:
+  name: wordclock
+  friendly_name: Wordclock
+  includes: wordclock.h
+
+esp8266:
+  board: nodemcuv2
+  
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "ol5l1kCWxYxLxZbJX0qBN7akG8Y6Yew2j9yB+yyz5Do="
+
+ota:
+  password: "b993cc4915b4154ee62e24b9af34986f"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Wordclock Fallback Hotspot"
+    password: "dGfqX7OaYofs"
+
+  domain: ".home"
+
+captive_portal:
+
+time:
+  - platform: homeassistant
+    id: esptime
+
+light:
+  - platform: neopixelbus
+    id: matrix
+    type: GRB
+    variant: WS2812
+    method:
+      type: esp8266_dma
+    pin: GPIO3
+    num_leds: 110
+    name: "Matrix"
+    on_turn_on:
+      - light.turn_on:
+          id: matrix
+          effect: Wordclock
+          brightness: 1
+      - logger.log: "Wordclock enabled"
+    effects:
+      - addressable_lambda:
+          name: "Wordclock"
+          update_interval: 1s
+          lambda: |- 
+            auto col = Color{32, 32, 32};
+            auto now = id(esptime).now();
+            auto setPixel = [&it, &col](unsigned i){it[i] = col; };
+            if(now.is_valid()) {
+              it.all() = Color::BLACK;
+              Wordclock::Time clockTime{ now.hour, now.minute };
+              Wordclock::update(clockTime, setPixel);   
+            }
+            else {
+              static int count = 0;
+              if(count == 0) {
+                it.all() = Color::BLACK;
+              }
+              it[count] = Color{0, 0, 32};
+              count = (count + 1)%11;              
+            }
+      - addressable_lambda:
+          name: "Test"
+          update_interval: 100ms
+          lambda: |- 
+            auto setPixel = [&it](unsigned i){it[i] = Color{0, 32, 0}; };
+            static int count = 0;
+            it.all() = Color::BLACK;
+            Wordclock::Display display{setPixel};
+            display.set_word(Wordclock::Words::hour_words[count]);
+            count = (count + 1) % 12;
+      - addressable_lambda:
+          name: "Test2"
+          update_interval: 1s
+          lambda: |- 
+            auto setPixel = [&it](unsigned i){it[i] = Color{32, 32, 32}; };
+            it.all() = Color::BLACK;
+            static Wordclock::Time clockTime{ 0, 0 };
+            Wordclock::update(clockTime, setPixel); 
+            if(clockTime.minute++ == 60)
+            {
+              clockTime.minute = 0;
+              clockTime.hour = (clockTime.hour + 1) % 24;
+            }
+
+        
+                      
